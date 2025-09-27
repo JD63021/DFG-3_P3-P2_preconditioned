@@ -34,7 +34,7 @@ testCase = fpc();
 
 %% User parameters
 multiplier = 500;         % Diagnostic snapshot recording multiplier (multiplier 1)
-force_multiplier = 1;    % Force recording multiplier (captures both Cd and Cl)
+force_multiplier = 500;    % Force recording multiplier (captures both Cd and Cl)
 D    = 1;               % Diffusivity (or similar)
 Re   = 1;
 mu   = 0.001;
@@ -89,12 +89,19 @@ gamma = 0;
 %     main1_time_nr_splitfast_gmres(U1, U2, U3, D, Re, o, dt, nt, gamma, mu, rho, ...
 %                   nodeInfo, elemInfo, boundaryInfo, t1, multiplier, force_multiplier, ...
 %                   testCase.corner, testCase.boundaryFlags, testCase.inletProfile, 'BDF', hop);
+% [U, x, y, x1, y1, z1, z2, z, T, nodeInfo, elemInfo, boundaryInfo, ...
+%   recordedTimes, u_series, u1_series, u2_series, ...
+%   forceRecordedTimes, Cd_series, Cl_series] = ...
+%   main1_time_nr_splitfast_gmres(U1, U2, U3, D, Re, o, dt, nt, gamma, mu, rho, ...
+%     nodeInfo, elemInfo, boundaryInfo, t1, multiplier, force_multiplier, ...
+%     testCase.corner, testCase.boundaryFlags, testCase.inletProfile, 'BDF', hop);
 [U, x, y, x1, y1, z1, z2, z, T, nodeInfo, elemInfo, boundaryInfo, ...
-  recordedTimes, u_series, u1_series, u2_series, ...
-  forceRecordedTimes, Cd_series, Cl_series] = ...
-  main1_time_nr_splitfast_gmres(U1, U2, U3, D, Re, o, dt, nt, gamma, mu, rho, ...
-    nodeInfo, elemInfo, boundaryInfo, t1, multiplier, force_multiplier, ...
-    testCase.corner, testCase.boundaryFlags, testCase.inletProfile, 'BDF', hop);
+          recordedTimes, u_series, u1_series, u2_series, ...
+          forceRecordedTimes, Cd_series, Cl_series] = ...
+    main1_time_nr_p3p2_matrixfree(U1, U2, U3, D, Re, o, dt, nt, gamma, mu, rho, ...
+                  nodeInfo, elemInfo, boundaryInfo, t1, multiplier, force_multiplier, ...
+                  testCase.corner, testCase.boundaryFlags, testCase.inletProfile, 'BDF', hop);
+
 
               
 % Update velocity and pressure parts from the solution.
@@ -130,26 +137,50 @@ title('Final Pressure Field');
 grid on; colormap(jet); colorbar;
 
 %% --- Append and Save Force/Lift Series ---
-% Keep only actually recorded rows (nonzero time & finite values)
-mask = (forceRecordedTimes > 0) & isfinite(Cd_series) & isfinite(Cl_series);
-tF = forceRecordedTimes(mask);
-CD = Cd_series(mask);
-CL = Cl_series(mask);
-
-% Nothing recorded? create empty 0x3 to avoid concat errors
-if isempty(tF), force_data = zeros(0,3);
-else,           force_data = [tF(:), CD(:), CL(:)];  % [time, Cd, Cl]
-end
+% % Keep only actually recorded rows (nonzero time & finite values)
+% mask = (forceRecordedTimes > 0) & isfinite(Cd_series) & isfinite(Cl_series);
+% tF = forceRecordedTimes(mask);
+% CD = Cd_series(mask);
+% CL = Cl_series(mask);
+% 
+% % Nothing recorded? create empty 0x3 to avoid concat errors
+% if isempty(tF), force_data = zeros(0,3);
+% else,           force_data = [tF(:), CD(:), CL(:)];  % [time, Cd, Cl]
+% end
+% 
+% fname = 'force_series.mat';
+% if exist(fname, 'file')
+%     S = load(fname);
+%     if isfield(S, 'force_total_series') && ~isempty(S.force_total_series)
+%         F = S.force_total_series;
+%         % Ensure 3 columns: [time, Cd, Cl]
+%         if size(F,2) < 3, F = [F, nan(size(F,1), 3 - size(F,2))]; end
+%         if size(force_data,2) < 3
+%             force_data = [force_data, nan(size(force_data,1), 3 - size(force_data,2))];
+%         end
+%         force_total_series = [F; force_data];
+%     else
+%         force_total_series = force_data;
+%     end
+% else
+%     force_total_series = force_data;
+% end
+% 
+% save(fname, 'force_total_series');
+% fprintf('Force series saved to %s (%d rows, %d cols).\n', fname, size(force_total_series,1), size(force_total_series,2));
+idx = isfinite(forceRecordedTimes) & isfinite(Cd_series) & isfinite(Cl_series);
+force_data = [forceRecordedTimes(idx), Cd_series(idx), Cl_series(idx)];  % [t, Cd, Cl]
 
 fname = 'force_series.mat';
-if exist(fname, 'file')
+if exist(fname,'file')
     S = load(fname);
-    if isfield(S, 'force_total_series') && ~isempty(S.force_total_series)
+    if isfield(S,'force_total_series') && ~isempty(S.force_total_series)
         F = S.force_total_series;
-        % Ensure 3 columns: [time, Cd, Cl]
-        if size(F,2) < 3, F = [F, nan(size(F,1), 3 - size(F,2))]; end
-        if size(force_data,2) < 3
-            force_data = [force_data, nan(size(force_data,1), 3 - size(force_data,2))];
+        % pad columns if older file had different width
+        if size(F,2) < size(force_data,2)
+            F = [F, nan(size(F,1), size(force_data,2)-size(F,2))];
+        elseif size(F,2) > size(force_data,2)
+            force_data = [force_data, nan(size(force_data,1), size(F,2)-size(force_data,2))];
         end
         force_total_series = [F; force_data];
     else
@@ -158,9 +189,8 @@ if exist(fname, 'file')
 else
     force_total_series = force_data;
 end
-
-save(fname, 'force_total_series');
-fprintf('Force series saved to %s (%d rows, %d cols).\n', fname, size(force_total_series,1), size(force_total_series,2));
+save('force_series_run.mat', 'force_data');
+fprintf('Force series saved to %s (%d rows).\n', fname, size(force_total_series,1));
 
 toc
 

@@ -13,8 +13,8 @@ function testCase = fpc()
 %
 % Note: fpc2q (velocity grid) and fpc2l (pressure grid) replace the older fpc2r.
 
-    testCase.gmshVelFile  = 'fpct2p3.m';  % gmsh file for velocity grid (Q2)
-    testCase.gmshPresFile = 'fpct2p2.m';  % gmsh file for pressure grid (Q1)
+    testCase.gmshVelFile  = 'fpct8p3.m';  % gmsh file for velocity grid (Q2)
+    testCase.gmshPresFile = 'fpct8p2.m';  % gmsh file for pressure grid (Q1)
     
     testCase.excludedVelFlags = [2 9 10 11 12];             % velocity boundary flags to exclude
     testCase.pBoundFlags      = [];                % (no pressure BCs in this case)
@@ -26,7 +26,7 @@ function testCase = fpc()
     % This function should accept: (t, y, H) and return the x-velocity.
     testCase.inletProfile   = @(t, y, H) 4*1.5*sin(pi*t/8)*(y*(H-y))/(H^2);
     testCase.inletProfileSS = @(t, y, H) 4*0.3*(y*(H-y))/(H^2);
-    testCase.corner = 2;%113;
+    testCase.corner = 4;%113;
 end
 
 
